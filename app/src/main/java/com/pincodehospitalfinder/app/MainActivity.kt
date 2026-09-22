@@ -32,6 +32,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.pincodehospitalfinder.app.ads.AdManager
+import com.pincodehospitalfinder.app.ads.BannerAdView
 import com.pincodehospitalfinder.app.data.Hospital
 import com.pincodehospitalfinder.app.preferences.SearchHistoryPreferences
 import com.pincodehospitalfinder.app.preferences.ThemePreferences
@@ -59,6 +61,9 @@ private val DarkColors = darkColorScheme(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        AdManager.initialize(applicationContext)
+
         val themePrefs = ThemePreferences(applicationContext)
         val historyPrefs = SearchHistoryPreferences(applicationContext)
         setContent {
@@ -82,6 +87,8 @@ class MainActivity : ComponentActivity() {
 fun AppNav(isDarkMode: Boolean, onToggleTheme: () -> Unit, historyPrefs: SearchHistoryPreferences) {
     val navController = rememberNavController()
     val viewModel: HospitalViewModel = viewModel()
+    val context = LocalContext.current
+    var detailsViewCount by remember { mutableStateOf(0) }
 
     NavHost(navController = navController, startDestination = "splash") {
         composable("splash") {
@@ -96,7 +103,18 @@ fun AppNav(isDarkMode: Boolean, onToggleTheme: () -> Unit, historyPrefs: SearchH
                 viewModel = viewModel,
                 isDarkMode = isDarkMode,
                 onToggleTheme = onToggleTheme,
-                onHospitalClick = { index -> navController.navigate("details/$index") },
+                onHospitalClick = { index ->
+                    detailsViewCount++
+                    // Show interstitial every 3rd details view — a natural transition point,
+                    // never on launch, never blocking core functionality.
+                    if (detailsViewCount % 3 == 0 && context is android.app.Activity) {
+                        AdManager.showInterstitial(context) {
+                            navController.navigate("details/$index")
+                        }
+                    } else {
+                        navController.navigate("details/$index")
+                    }
+                },
                 onNavigate = { route -> navController.navigate(route) },
                 historyPrefs = historyPrefs
             )
@@ -169,6 +187,9 @@ fun HomeScreen(
                     }
                 }
             )
+        },
+        bottomBar = {
+            BannerAdView()
         }
     ) { padding ->
         Column(
