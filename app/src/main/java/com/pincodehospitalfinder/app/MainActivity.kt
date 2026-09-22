@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,42 +22,75 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.pincodehospitalfinder.app.data.Hospital
+import com.pincodehospitalfinder.app.preferences.ThemePreferences
 import com.pincodehospitalfinder.app.viewmodel.HospitalViewModel
 import com.pincodehospitalfinder.app.viewmodel.SearchState
+import kotlinx.coroutines.launch
+
+private val LightColors = lightColorScheme(
+    primary = androidx.compose.ui.graphics.Color(0xFF0D6EFD),
+    background = androidx.compose.ui.graphics.Color(0xFFFDF8FF),
+    surface = androidx.compose.ui.graphics.Color(0xFFFDF8FF)
+)
+
+private val DarkColors = darkColorScheme(
+    primary = androidx.compose.ui.graphics.Color(0xFF4C9AFF),
+    background = androidx.compose.ui.graphics.Color(0xFF121212),
+    surface = androidx.compose.ui.graphics.Color(0xFF1E1E1E)
+)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val themePrefs = ThemePreferences(applicationContext)
         setContent {
-            MaterialTheme {
-                HomeScreen()
+            val isDarkMode by themePrefs.isDarkMode.collectAsState(initial = false)
+            val scope = rememberCoroutineScope()
+
+            MaterialTheme(colorScheme = if (isDarkMode) DarkColors else LightColors) {
+                HomeScreen(
+                    isDarkMode = isDarkMode,
+                    onToggleTheme = {
+                        scope.launch { themePrefs.setDarkMode(!isDarkMode) }
+                    }
+                )
             }
         }
     }
 }
 
 @Composable
-fun HomeScreen(viewModel: HospitalViewModel = viewModel()) {
+fun HomeScreen(
+    viewModel: HospitalViewModel = viewModel(),
+    isDarkMode: Boolean,
+    onToggleTheme: () -> Unit
+) {
     var pinCode by remember { mutableStateOf("") }
     var validationError by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
-    Scaffold { padding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Pincode Hospital Finder", fontSize = 18.sp) },
+                actions = {
+                    IconButton(onClick = onToggleTheme) {
+                        Icon(
+                            imageVector = if (isDarkMode) Icons.Filled.LightMode else Icons.Filled.DarkMode,
+                            contentDescription = if (isDarkMode) "Switch to light mode" else "Switch to dark mode"
+                        )
+                    }
+                }
+            )
+        }
+    ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(24.dp)
+                .padding(horizontal = 24.dp)
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = "Pincode Hospital Finder",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Text(
                 text = "Find trusted hospitals near any PIN code.",
@@ -147,6 +183,7 @@ fun HomeScreen(viewModel: HospitalViewModel = viewModel()) {
                                 text = "Hospital information is provided for discovery purposes. Please verify services and availability directly with the hospital.",
                                 fontSize = 11.sp
                             )
+                            Spacer(modifier = Modifier.height(16.dp))
                         }
                     }
                 }
