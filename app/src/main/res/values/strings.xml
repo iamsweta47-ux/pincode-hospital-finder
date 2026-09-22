@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Pincode Hospital Finder</string>
+    <string name="tagline">Find trusted hospitals near any PIN code.</string>
+</resources>
