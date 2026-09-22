@@ -16,7 +16,6 @@ class HospitalRepository {
 
     suspend fun findTopHospitals(pinCode: String): HospitalResult {
         return try {
-            // Step 1: PIN code -> location
             val locationResults = ApiClient.nominatimApi.searchPinCode(pinCode)
 
             if (locationResults.isEmpty()) {
@@ -26,11 +25,14 @@ class HospitalRepository {
             val userLat = locationResults[0].lat.toDouble()
             val userLon = locationResults[0].lon.toDouble()
 
-            // Step 2: Build Overpass query — hospitals within 5km radius
             val query = """
                 [out:json];
-                node["amenity"="hospital"](around:5000,$userLat,$userLon);
-                out body;
+                (
+                  node["amenity"="hospital"](around:15000,$userLat,$userLon);
+                  way["amenity"="hospital"](around:15000,$userLat,$userLon);
+                  relation["amenity"="hospital"](around:15000,$userLat,$userLon);
+                );
+                out center;
             """.trimIndent()
 
             val response = ApiClient.overpassApi.getNearbyHospitals(query)
@@ -39,10 +41,9 @@ class HospitalRepository {
                 return HospitalResult.Error("We couldn't find hospitals near this PIN code. Please try another PIN code.")
             }
 
-            // Step 3: Convert to Hospital objects with distance
             val hospitals = response.elements.mapNotNull { element ->
-                val lat = element.lat ?: return@mapNotNull null
-                val lon = element.lon ?: return@mapNotNull null
+                val lat = element.lat ?: element.center?.lat ?: return@mapNotNull null
+                val lon = element.lon ?: element.center?.lon ?: return@mapNotNull null
                 val tags = element.tags ?: emptyMap()
                 val name = tags["name"] ?: return@mapNotNull null
 
@@ -59,6 +60,7 @@ class HospitalRepository {
                     openingHours = tags["opening_hours"]
                 )
             }
+                .distinctBy { it.name }
                 .sortedBy { it.distanceKm }
                 .take(3)
 
