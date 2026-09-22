@@ -9,7 +9,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -31,6 +33,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.pincodehospitalfinder.app.data.Hospital
+import com.pincodehospitalfinder.app.preferences.SearchHistoryPreferences
 import com.pincodehospitalfinder.app.preferences.ThemePreferences
 import com.pincodehospitalfinder.app.ui.AboutScreen
 import com.pincodehospitalfinder.app.ui.ContactScreen
@@ -57,6 +60,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val themePrefs = ThemePreferences(applicationContext)
+        val historyPrefs = SearchHistoryPreferences(applicationContext)
         setContent {
             val isDarkMode by themePrefs.isDarkMode.collectAsState(initial = false)
             val scope = rememberCoroutineScope()
@@ -66,7 +70,8 @@ class MainActivity : ComponentActivity() {
                     isDarkMode = isDarkMode,
                     onToggleTheme = {
                         scope.launch { themePrefs.setDarkMode(!isDarkMode) }
-                    }
+                    },
+                    historyPrefs = historyPrefs
                 )
             }
         }
@@ -74,7 +79,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun AppNav(isDarkMode: Boolean, onToggleTheme: () -> Unit) {
+fun AppNav(isDarkMode: Boolean, onToggleTheme: () -> Unit, historyPrefs: SearchHistoryPreferences) {
     val navController = rememberNavController()
     val viewModel: HospitalViewModel = viewModel()
 
@@ -92,7 +97,8 @@ fun AppNav(isDarkMode: Boolean, onToggleTheme: () -> Unit) {
                 isDarkMode = isDarkMode,
                 onToggleTheme = onToggleTheme,
                 onHospitalClick = { index -> navController.navigate("details/$index") },
-                onNavigate = { route -> navController.navigate(route) }
+                onNavigate = { route -> navController.navigate(route) },
+                historyPrefs = historyPrefs
             )
         }
         composable(
@@ -120,11 +126,24 @@ fun HomeScreen(
     isDarkMode: Boolean,
     onToggleTheme: () -> Unit,
     onHospitalClick: (Int) -> Unit,
-    onNavigate: (String) -> Unit
+    onNavigate: (String) -> Unit,
+    historyPrefs: SearchHistoryPreferences
 ) {
     var pinCode by remember { mutableStateOf("") }
     var validationError by remember { mutableStateOf<String?>(null) }
     var menuExpanded by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val recentPinCodes by historyPrefs.recentPinCodes.collectAsState(initial = emptyList())
+
+    fun runSearch(code: String) {
+        if (code.length != 6) {
+            validationError = "Please enter a valid 6-digit PIN code"
+        } else {
+            validationError = null
+            viewModel.searchHospitals(code)
+            scope.launch { historyPrefs.addPinCode(code) }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -184,17 +203,36 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Button(
-                onClick = {
-                    if (pinCode.length != 6) {
-                        validationError = "Please enter a valid 6-digit PIN code"
-                    } else {
-                        validationError = null
-                        viewModel.searchHospitals(pinCode)
-                    }
-                },
+                onClick = { runSearch(pinCode) },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Search Hospitals")
+            }
+
+            if (recentPinCodes.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(20.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = "Recent PIN Codes", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    TextButton(onClick = { scope.launch { historyPrefs.clearHistory() } }) {
+                        Text("Clear", fontSize = 12.sp)
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(recentPinCodes) { code ->
+                        AssistChip(
+                            onClick = {
+                                pinCode = code
+                                runSearch(code)
+                            },
+                            label = { Text(code) }
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
