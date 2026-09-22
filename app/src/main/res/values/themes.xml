@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.PincodeHospitalFinder" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#0D6EFD</item>
+        <item name="android:windowBackground">#FFFFFF</item>
+    </style>
+</resources>
