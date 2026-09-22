@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,6 +32,11 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.pincodehospitalfinder.app.data.Hospital
 import com.pincodehospitalfinder.app.preferences.ThemePreferences
+import com.pincodehospitalfinder.app.ui.AboutScreen
+import com.pincodehospitalfinder.app.ui.ContactScreen
+import com.pincodehospitalfinder.app.ui.PrivacyPolicyScreen
+import com.pincodehospitalfinder.app.ui.SplashScreen
+import com.pincodehospitalfinder.app.ui.TermsScreen
 import com.pincodehospitalfinder.app.viewmodel.HospitalViewModel
 import com.pincodehospitalfinder.app.viewmodel.SearchState
 import kotlinx.coroutines.launch
@@ -72,15 +78,21 @@ fun AppNav(isDarkMode: Boolean, onToggleTheme: () -> Unit) {
     val navController = rememberNavController()
     val viewModel: HospitalViewModel = viewModel()
 
-    NavHost(navController = navController, startDestination = "home") {
+    NavHost(navController = navController, startDestination = "splash") {
+        composable("splash") {
+            SplashScreen(onFinished = {
+                navController.navigate("home") {
+                    popUpTo("splash") { inclusive = true }
+                }
+            })
+        }
         composable("home") {
             HomeScreen(
                 viewModel = viewModel,
                 isDarkMode = isDarkMode,
                 onToggleTheme = onToggleTheme,
-                onHospitalClick = { index ->
-                    navController.navigate("details/$index")
-                }
+                onHospitalClick = { index -> navController.navigate("details/$index") },
+                onNavigate = { route -> navController.navigate(route) }
             )
         }
         composable(
@@ -89,13 +101,16 @@ fun AppNav(isDarkMode: Boolean, onToggleTheme: () -> Unit) {
         ) { backStackEntry ->
             val index = backStackEntry.arguments?.getInt("index") ?: 0
             val hospital = (viewModel.searchState as? SearchState.Success)?.hospitals?.getOrNull(index)
-
             if (hospital != null) {
                 DetailsScreen(hospital = hospital, onBack = { navController.popBackStack() })
             } else {
                 navController.popBackStack()
             }
         }
+        composable("about") { AboutScreen(onBack = { navController.popBackStack() }) }
+        composable("privacy") { PrivacyPolicyScreen(onBack = { navController.popBackStack() }) }
+        composable("terms") { TermsScreen(onBack = { navController.popBackStack() }) }
+        composable("contact") { ContactScreen(onBack = { navController.popBackStack() }) }
     }
 }
 
@@ -104,10 +119,12 @@ fun HomeScreen(
     viewModel: HospitalViewModel,
     isDarkMode: Boolean,
     onToggleTheme: () -> Unit,
-    onHospitalClick: (Int) -> Unit
+    onHospitalClick: (Int) -> Unit,
+    onNavigate: (String) -> Unit
 ) {
     var pinCode by remember { mutableStateOf("") }
     var validationError by remember { mutableStateOf<String?>(null) }
+    var menuExpanded by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -120,6 +137,17 @@ fun HomeScreen(
                             contentDescription = if (isDarkMode) "Switch to light mode" else "Switch to dark mode"
                         )
                     }
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(Icons.Filled.Menu, contentDescription = "Menu")
+                        }
+                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                            DropdownMenuItem(text = { Text("About") }, onClick = { menuExpanded = false; onNavigate("about") })
+                            DropdownMenuItem(text = { Text("Privacy Policy") }, onClick = { menuExpanded = false; onNavigate("privacy") })
+                            DropdownMenuItem(text = { Text("Terms of Use") }, onClick = { menuExpanded = false; onNavigate("terms") })
+                            DropdownMenuItem(text = { Text("Contact") }, onClick = { menuExpanded = false; onNavigate("contact") })
+                        }
+                    }
                 }
             )
         }
@@ -131,9 +159,7 @@ fun HomeScreen(
                 .padding(horizontal = 24.dp)
         ) {
             Spacer(modifier = Modifier.height(16.dp))
-
             Text(text = "Find trusted hospitals near any PIN code.", fontSize = 14.sp)
-
             Spacer(modifier = Modifier.height(24.dp))
 
             OutlinedTextField(
@@ -190,18 +216,11 @@ fun HomeScreen(
                     Text(text = state.message, color = MaterialTheme.colorScheme.error, fontSize = 14.sp)
                 }
                 is SearchState.Success -> {
-                    Text(
-                        text = "Top hospitals near $pinCode",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp
-                    )
+                    Text(text = "Top hospitals near $pinCode", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                     Spacer(modifier = Modifier.height(12.dp))
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         itemsIndexed(state.hospitals) { index, hospital ->
-                            HospitalCard(
-                                hospital = hospital,
-                                onClick = { onHospitalClick(index) }
-                            )
+                            HospitalCard(hospital = hospital, onClick = { onHospitalClick(index) })
                         }
                         item {
                             Spacer(modifier = Modifier.height(8.dp))
@@ -221,8 +240,7 @@ fun HomeScreen(
 @Composable
 fun HospitalCard(hospital: Hospital, onClick: () -> Unit) {
     ElevatedCard(
-        modifier = Modifier
-            .fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         onClick = onClick
     ) {
